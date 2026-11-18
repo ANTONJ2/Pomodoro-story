@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pomodoro Builder</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-mode="focus">
+  <main class="app">
+    <h1 class="brand">Pomodoro Builder</h1>
+
+    <!-- Mode switcher -->
+    <nav class="modes" role="tablist" aria-label="Timer mode">
+      <button class="mode is-active" role="tab" aria-selected="true"  data-mode="focus">Focus</button>
+      <button class="mode"           role="tab" aria-selected="false" data-mode="short">Short break</button>
+      <button class="mode"           role="tab" aria-selected="false" data-mode="long">Long break</button>
+    </nav>
+
+    <!-- Progress ring + digits -->
+    <section class="timer" id="timer">
+      <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="ring-track" cx="100" cy="100" r="90"/>
+        <circle class="ring-progress" id="ring" cx="100" cy="100" r="90"/>
+      </svg>
+      <div class="readout">
+        <div class="time" id="time" role="timer">25:00</div>
+        <div class="label" id="label">Focus</div>
+      </div>
+    </section>
+
+    <!-- Completed focus rounds in the current cycle of four -->
+    <div class="cycle" role="img" aria-label="Focus rounds completed in this cycle">
+      <span class="cycle-seg"></span>
+      <span class="cycle-seg"></span>
+      <span class="cycle-seg"></span>
+      <span class="cycle-seg"></span>
+    </div>
+
+    <p class="message" id="message" aria-live="polite"></p>
+
+    <div class="controls">
+      <button class="btn btn-primary" id="primary">Start</button>
+      <button class="btn" id="reset">Reset</button>
+    </div>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>

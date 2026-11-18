@@ -1,0 +1,141 @@
+/* Pomodoro Builder - style.css
+   Dark, minimal, soft glows. Each mode sets three colour tokens on <body>;
+   registered custom properties let the background and glow cross-fade smoothly. */
+
+@property --bg1    { syntax: '<color>'; inherits: true; initial-value: #3a1c2e; }
+@property --bg2    { syntax: '<color>'; inherits: true; initial-value: #0d0a14; }
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #ff6b81; }
+
+:root {
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --text: #f4eef6;
+  --muted: rgba(244, 238, 246, .62);
+  --glass: rgba(255, 255, 255, .06);
+  --glass-border: rgba(255, 255, 255, .11);
+  --font: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+body[data-mode="focus"] { --bg1: #3a1c2e; --bg2: #0d0a14; --accent: #ff6b81; }
+body[data-mode="short"] { --bg1: #0f3a3f; --bg2: #070d12; --accent: #4fd1c5; }
+body[data-mode="long"]  { --bg1: #1c2552; --bg2: #080a16; --accent: #7c9cff; }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  font-family: var(--font);
+  background-color: var(--bg2);
+  background-image: radial-gradient(120% 90% at 50% 20%, var(--bg1), var(--bg2) 65%);
+  background-attachment: fixed;
+  transition: --bg1 1.2s var(--ease), --bg2 1.2s var(--ease), --accent 1.2s var(--ease);
+}
+
+.app {
+  width: min(92vw, 420px);
+  padding: 2rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(1.2rem, 4vh, 2rem);
+}
+
+.brand { margin: 0; font-size: .95rem; font-weight: 500; letter-spacing: .04em; color: var(--muted); }
+
+/* ---- Mode switcher ---- */
+.modes {
+  display: flex; gap: .25rem; padding: .3rem;
+  background: var(--glass); border: 1px solid var(--glass-border);
+  border-radius: 999px; backdrop-filter: blur(12px);
+}
+.mode {
+  appearance: none; border: 0; background: transparent; color: var(--muted);
+  font: inherit; font-size: .88rem; padding: .55rem 1rem; border-radius: 999px; cursor: pointer;
+  transition: background .4s var(--ease), color .4s var(--ease);
+}
+.mode:hover { color: var(--text); }
+.mode.is-active { background: rgba(255, 255, 255, .14); color: var(--text); }
+
+/* ---- Ring and digits ---- */
+.timer { position: relative; width: min(78vw, 340px); aspect-ratio: 1; }
+.ring { width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 5; }
+.ring-track { stroke: rgba(255, 255, 255, .08); }
+.ring-progress { stroke: var(--accent); stroke-linecap: round; filter: drop-shadow(0 0 6px var(--accent)); }
+/* Only used for refills (reset / mode change); while running the ring is driven every frame. */
+.ring-progress.is-easing { transition: stroke-dashoffset .9s var(--ease); }
+
+.readout { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: .5rem; }
+.time {
+  font-size: clamp(3.4rem, 15vw, 5.4rem);
+  font-weight: 200; line-height: 1; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 40px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.label { font-size: 1rem; color: var(--accent); }
+
+/* Completion pulse */
+.timer.is-complete { animation: pulse 1.6s var(--ease) 2; }
+@keyframes pulse {
+  0%, 100% { transform: scale(1);    filter: drop-shadow(0 0 0 transparent); }
+  50%      { transform: scale(1.04); filter: drop-shadow(0 0 36px var(--accent)); }
+}
+
+/* ---- Cycle rail: four focus rounds as one glowing track ---- */
+.cycle {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 12px;
+  background: var(--glass); border: 1px solid var(--glass-border);
+  border-radius: 999px; backdrop-filter: blur(12px);
+}
+.cycle-seg {
+  position: relative; overflow: hidden;
+  width: 32px; height: 5px; border-radius: 999px;
+  background: rgba(255, 255, 255, .22);
+  transition: box-shadow .55s var(--ease);
+}
+.cycle-seg::after {
+  content: "";
+  position: absolute; inset: 0; border-radius: inherit;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform .55s var(--ease);
+}
+.cycle-seg.is-filled { box-shadow: 0 0 14px var(--accent); }
+.cycle-seg.is-filled::after { transform: scaleX(1); }
+
+/* ---- Message ---- */
+.message {
+  min-height: 1.4em; margin: 0; text-align: center; font-size: .95rem; color: var(--muted);
+  opacity: 0; transform: translateY(4px);
+  transition: opacity .5s var(--ease), transform .5s var(--ease);
+}
+.message.is-visible { opacity: 1; transform: none; }
+
+/* ---- Buttons ---- */
+.controls { display: flex; gap: .9rem; align-items: center; }
+.btn {
+  appearance: none; font: inherit; font-size: 1rem; font-weight: 500; cursor: pointer;
+  padding: .9rem 1.6rem; border-radius: 999px; color: var(--text);
+  background: var(--glass); border: 1px solid var(--glass-border);
+  transition: transform .25s var(--ease), box-shadow .4s var(--ease), background .4s var(--ease);
+}
+.btn:hover  { transform: translateY(-2px); background: rgba(255, 255, 255, .1); }
+.btn:active { transform: scale(.97); }
+.btn-primary {
+  min-width: 9rem; padding: 1.05rem 2.4rem; font-size: 1.15rem;
+  color: #12090f; background: var(--accent); border-color: transparent;
+  box-shadow: 0 10px 34px -8px var(--accent);
+}
+.btn-primary:hover { background: var(--accent); box-shadow: 0 14px 40px -6px var(--accent); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
