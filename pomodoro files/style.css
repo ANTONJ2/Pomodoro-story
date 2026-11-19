@@ -121,8 +121,13 @@ body::after  { bottom: -40vmax; right: -30vmax; opacity: .7; animation: drift-b 
   counter-increment: pos;
   transition: color .4s var(--ease), background .3s var(--ease), box-shadow .3s var(--ease), scale .3s var(--spring);
 }
+/* Long custom names are shortened with "…" so the tab bar never overflows */
+.modes { max-width: 100%; }
+.mode { min-width: 0; flex: 0 1 auto; }   /* tabs shrink only when space runs out */
+.mode-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 8rem; }
 /* Run-order number (1, 2, 3) in front of each tab label */
 .mode::before {
+  flex: none;
   content: counter(pos);
   display: inline-grid; place-items: center;
   width: 1.15rem; height: 1.15rem; border-radius: 50%;
@@ -328,7 +333,17 @@ body[data-status="running"] .btn-loop.is-active .loop-icon { animation: spin 2.4
   counter-increment: pos;
   transition: background .3s var(--ease), box-shadow .3s var(--ease), opacity .3s var(--ease), scale .3s var(--spring);
 }
-.setting-row label { flex: 1; display: flex; align-items: center; gap: .55rem; font-size: .95rem; text-align: left; }
+/* Editable session name: looks like plain text until hovered or focused */
+.name-input {
+  flex: 1; min-width: 0; width: 100%;
+  padding: .35rem .5rem; border-radius: 10px;
+  font: inherit; font-size: .95rem; color: var(--text); text-overflow: ellipsis;
+  background: transparent; border: 1px solid transparent;
+  transition: background .3s var(--ease), border-color .3s var(--ease), box-shadow .3s var(--ease);
+}
+.name-input::placeholder { color: var(--muted); }
+.name-input:hover { border-color: var(--glass-border); }
+.name-input:focus { outline: none; background: rgba(255, 255, 255, .06); border-color: color-mix(in srgb, var(--dot) 55%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot) 18%, transparent); }
 .setting-rows.is-sorting .setting-row:not(.is-dragging) { opacity: .7; }
 .setting-row.is-dragging {
   z-index: 2; scale: 1.03;
@@ -356,6 +371,31 @@ body[data-status="running"] .btn-loop.is-active .loop-icon { animation: spin 2.4
   color: #12090f; background: var(--dot);
 }
 .hint-grip { color: var(--text); }
+
+/* 🔊 preview button: ripples in the mode's colour while its sound plays */
+.sound-btn {
+  appearance: none; border: 0; cursor: pointer; flex: none;
+  display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%;
+  color: var(--muted); background: transparent;
+  transition: color .3s var(--ease), background .3s var(--ease), transform .3s var(--spring);
+}
+.sound-btn svg {
+  width: 1.05rem; height: 1.05rem; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.sound-btn:hover { color: var(--text); background: rgba(255, 255, 255, .08); }
+.sound-btn:active { transform: scale(.88); transition-duration: .1s; }
+.sound-btn.is-playing { color: var(--dot); animation: sound-ripple 1s ease-out infinite; }
+.sound-btn.is-playing svg path:not(:first-child) { animation: sound-wave .5s ease-in-out infinite alternate; }
+@keyframes sound-ripple {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--dot) 55%, transparent); }
+  to   { box-shadow: 0 0 0 10px transparent; }
+}
+@keyframes sound-wave { to { opacity: .35; } }
+@media (max-width: 380px) {
+  .setting-row { gap: .3rem; }
+  .name-input { font-size: .85rem; padding: .3rem .35rem; }
+}
 .loop-seq { color: var(--text); }
 .setting-row[data-mode="focus"] { --dot: #ff6b81; }
 .setting-row[data-mode="short"] { --dot: #4fd1c5; }

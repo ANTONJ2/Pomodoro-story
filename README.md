@@ -7,7 +7,7 @@ The [Pomodoro Technique](https://en.wikipedia.org/wiki/Pomodoro_Technique) split
 ## Features
 
 - **Three modes:** Focus (25 min), Short break (5 min) and Long break (15 min) by default, switchable with tabs at the top.
-- **Custom durations:** the ⚙ button opens **Timer settings**, where you set each session's length in minutes (Focus 1–120, breaks 1–60). Your choice is remembered in this browser, and **Restore defaults** brings back 25 / 5 / 15.
+- **Custom names and durations:** the ⚙ button opens **Timer settings**, where you can rename each session (tap its name, up to 16 characters; leave it empty to get the default back) and set its length in minutes (Focus 1–120, breaks 1–60). Your choice is remembered in this browser, and **Restore defaults** brings back the original names, 25 / 5 / 15 minutes and the default order.
 - **Automatic cycle:** when a session ends, the next one in your run order is loaded for you (by default Focus → Short break → Long break, then back to Focus).
 - **You stay in control:** the next session is loaded but does not start until you click **Start**.
 - **Your own run order:** drag the mode tabs (or the ⠿ handles in Timer settings) to choose which session runs 1st, 2nd and 3rd. Each tab shows its position number. The order is remembered and is used both when a session ends normally and in Auto loop. Keyboard: **Shift + ←/→** on a tab, or **↑/↓** on a settings handle.
@@ -17,7 +17,12 @@ The [Pomodoro Technique](https://en.wikipedia.org/wiki/Pomodoro_Technique) split
 - **Start / Pause / Resume and Reset** controls.
 - **Live tab title:** the browser tab shows the remaining time and current mode (e.g. `24:13 · Focus`), so you can keep track from another tab.
 - **Accurate in background tabs:** the countdown is based on the real clock, not on counting ticks, so it stays correct even when the browser throttles inactive tabs.
-- **Completion chime:** a gentle three-note chime (C–E–G) generated with the Web Audio API. No sound files are needed.
+- **A unique sound for each mode**, played when that session ends, so you know what just finished without looking:
+  - **Focus:** a warm, rising bell arpeggio
+  - **Short break:** a bright double "ding-ding"
+  - **Long break:** a deep, slowly fading singing bowl
+
+  All sounds are generated with the Web Audio API (no sound files), and each can be previewed with the 🔊 button in Timer settings.
 - **Mode-based colour themes** that cross-fade smoothly:
   | Mode | Accent colour |
   |---|---|
@@ -55,11 +60,11 @@ With the server running on port 8080, use the **Launch Chrome against localhost*
 
 1. Pick a mode (Focus is selected by default).
 2. Click **Start**. The button changes to **Pause**; pausing turns it into **Resume**.
-3. When the timer reaches zero, a chime plays, the timer pulses, and the next session is loaded with a short message.
+3. When the timer reaches zero, the sound for the session that just ended plays, the timer pulses, and the next session is loaded with a short message.
 4. Click **Start** to begin the next session.
 5. **Reset** restarts the current mode from its full duration.
 
-**Auto loop:** click **Loop**, set the number of loops with **−** / **+** (the dialog shows the total time), then click **Start loop**. Each loop runs the three sessions in your chosen order and durations, and every session starts on its own after a chime. Click **Stop loop** at any time to end it.
+**Auto loop:** click **Loop**, set the number of loops with **−** / **+** (the dialog shows the total time), then click **Start loop**. Each loop runs the three sessions in your chosen order and durations, and every session starts on its own after the end-of-session sound. Click **Stop loop** at any time to end it.
 
 > Sound only plays after you've clicked Start at least once, because browsers block audio until the user interacts with the page.
 
@@ -88,7 +93,7 @@ Pomodoro story/
 | State | One `state` object: mode, status (`idle`/`running`/`paused`), remaining time, end time, completed rounds |
 | Rendering | Updates the clock, tab title, ring, buttons, round tracker and message |
 | Timer logic | `setMode`, `start`, `pause`, `tick`, `complete` |
-| Audio | Lazily creates an `AudioContext` and plays the chime |
+| Audio | Lazily creates an `AudioContext` and plays each mode's end-of-session sound |
 | Events | Button clicks and the `visibilitychange` re-sync |
 
 **Timing model.** `start()` records an `endTime`. Every tick recomputes `remaining = endTime - Date.now()`. A `requestAnimationFrame` loop keeps the ring smooth while the tab is visible, a 500 ms `setInterval` keeps time moving when the tab is in the background, and `visibilitychange` re-syncs immediately when you return.
@@ -101,7 +106,7 @@ Pomodoro story/
 - **Default run order:** change `DEFAULT_ORDER` in `script.js` (users can override it by dragging; saved under `pomodoro.order`).
 - **Round tracker size:** change `ROUNDS_PER_CYCLE` (also update the number of `.cycle-seg` elements in `index.html` to match).
 - **Colours:** edit the `body[data-mode="…"]` rules in `style.css`.
-- **Chime:** change the frequencies in `playChime()` in `script.js`.
+- **Sounds:** edit the `SOUNDS` object in `script.js` (one function per mode, built from the `bell`, `pluck` and `bowl` helpers).
 - **Adding a new mode:** add an entry to `MODES`, a button with a matching `data-mode` in `index.html`, and a `body[data-mode="…"]` rule in `style.css`.
 - **Ring size:** the SVG circle radius is `90`; if you change it, update `RING_LENGTH` in `script.js` too.
 

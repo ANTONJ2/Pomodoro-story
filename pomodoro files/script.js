@@ -13,6 +13,9 @@
   const RING_LENGTH = 2 * Math.PI * 90;       // circumference of the SVG ring (r = 90)
   const DEFAULT_ORDER = ['focus', 'short', 'long'];
   const DEFAULT_MINUTES = { focus: 25, short: 5, long: 15 };
+  const DEFAULT_NAMES = { focus: 'Focus', short: 'Short break', long: 'Long break' };
+  const NAMES_KEY = 'pomodoro.names';         // user-chosen mode names
+  const NAME_MAX = 16;
   const STORAGE_KEY = 'pomodoro.minutes';     // user-chosen durations, remembered in this browser
   const ORDER_KEY = 'pomodoro.order';         // user-chosen run order (1st, 2nd, 3rd)
 
@@ -30,6 +33,7 @@
     settingsBtn: $('settingsBtn'), settingsDialog: $('settingsDialog'), settingsForm: $('settingsForm'),
     settingsDefaults: $('settingsDefaults'),
     setInputs: { focus: $('setFocus'), short: $('setShort'), long: $('setLong') },
+    nameInputs: { focus: $('nameFocus'), short: $('nameShort'), long: $('nameLong') },
     steps: document.querySelectorAll('.step'),
     dialogs: document.querySelectorAll('dialog'),
   };
@@ -47,6 +51,7 @@
     intervalId: 0,
     easeTimeout: 0,
     audioCtx: null,
+    master: null,          // output node all sounds go through
     loop: null,            // null, or { total, current (1-based), step (index into state.order) }
     order: [...DEFAULT_ORDER],  // run order of the three modes; drives tabs, manual flow and auto loop
   };
@@ -196,7 +201,7 @@
 
   function complete() {
     if (state.mode === 'focus') state.completedFocus += 1;
-    playChime();
+    playSound(state.mode);                      // the sound of the session that just ended
     if (state.loop) advanceLoop();
     else advanceManual();
     pulse();
@@ -206,7 +211,7 @@
   function advanceManual() {
     const done = MODES[state.mode].label;
     const next = nextInOrder(state.mode);
-    setMode(next, `${done} done. Ready for ${MODES[next].label.toLowerCase()}?`);
+    setMode(next, `${done} done. Ready for ${MODES[next].label}?`);
   }
 
   /* ---------- Run order (1st, 2nd, 3rd) ---------- */
@@ -437,8 +442,51 @@
     } catch { /* storage unavailable: settings last for this visit only */ }
   }
 
+  /* ---------- Custom mode names ---------- */
+  // Trim, collapse spaces and cap the length; an empty name falls back to the default.
+  const cleanName = (m, raw) =>
+    String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX) || DEFAULT_NAMES[m];
+
+  function loadNames() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(NAMES_KEY));
+      if (saved) Object.keys(MODES).forEach((m) => { MODES[m].label = cleanName(m, saved[m]); });
+    } catch { /* keep defaults */ }
+  }
+
+  function saveNames() {
+    try {
+      const data = {};
+      Object.keys(MODES).forEach((m) => { data[m] = MODES[m].label; });
+      localStorage.setItem(NAMES_KEY, JSON.stringify(data));
+    } catch { /* ignore */ }
+  }
+
+  // Push the current names into every place they appear.
+  function renderNames() {
+    el.modes.forEach((btn) => {
+      const name = MODES[btn.dataset.mode].label;
+      btn.querySelector('.mode-name').textContent = name;
+      btn.title = `${name} (drag to change the order)`;
+    });
+    Object.keys(MODES).forEach((m) => {
+      const name = MODES[m].label;
+      const row = el.setInputs[m].closest('.setting-row');
+      row.querySelector('.drag-handle').setAttribute('aria-label', `Reorder ${name} (use ↑ and ↓)`);
+      row.querySelector('.sound-btn').setAttribute('aria-label', `Play the ${name} end sound`);
+      el.setInputs[m].setAttribute('aria-label', `${name} minutes`);
+      el.nameInputs[m].setAttribute('aria-label', 'Session name');
+    });
+    el.label.textContent = MODES[state.mode].label;
+    el.loopSeq.textContent = state.order.map((m) => MODES[m].label).join(' → ');
+    state.shownSeconds = -1;                    // refresh the browser tab title
+    render();
+    moveIndicator();                            // tab widths may have changed
+  }
+
   function openSettings() {
     Object.keys(MODES).forEach((m) => { el.setInputs[m].value = MODES[m].minutes; });
+    Object.keys(MODES).forEach((m) => { el.nameInputs[m].value = MODES[m].label; });
     state.order.forEach((m) => el.settingRows.appendChild(el.setInputs[m].closest('.setting-row')));
     el.settingsDialog.showModal();
   }
@@ -448,6 +496,9 @@
       MODES[m].minutes = clampInput(el.setInputs[m]);
     });
     saveMinutes();
+    Object.keys(MODES).forEach((m) => { MODES[m].label = cleanName(m, el.nameInputs[m].value); });
+    saveNames();
+    renderNames();
     applyOrder(rowsSort.keys());
     if (state.status === 'idle') {
       setMode(state.mode, 'Timer settings saved.');   // reload the current session with the new length
@@ -484,24 +535,77 @@
       if (AC) state.audioCtx = new AC();
     }
     if (state.audioCtx && state.audioCtx.state === 'suspended') state.audioCtx.resume();
+    if (state.audioCtx && !state.master) {
+      // A gentle compressor on the way out keeps overlapping notes from clipping.
+      state.master = state.audioCtx.createDynamicsCompressor();
+      state.master.connect(state.audioCtx.destination);
+    }
   }
 
-  function playChime() {
+  // One enveloped oscillator: quick attack, exponential fade.
+  function voice({ freq, type = 'sine', t, attack = 0.01, decay, peak, detune = 0 }) {
     const ctx = state.audioCtx;
-    if (!ctx) return;
-    [523.25, 659.25, 783.99].forEach((freq, i) => {       // C5, E5, G5
-      const t = ctx.currentTime + i * 0.22;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(0.18, t + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(t);
-      osc.stop(t + 1.3);
-    });
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    osc.detune.value = detune;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(peak, t + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+    osc.connect(gain).connect(state.master);
+    osc.start(t);
+    osc.stop(t + attack + decay + 0.05);
+  }
+
+  // Bell: pure tone plus an inharmonic shimmer partial.
+  function bell(freq, t, decay, peak) {
+    voice({ freq, t, decay, peak });
+    voice({ freq: freq * 2, type: 'triangle', t, decay: decay * 0.5, peak: peak * 0.2 });
+    voice({ freq: freq * 2.76, t, decay: decay * 0.35, peak: peak * 0.25 });
+  }
+
+  // Pluck: short, bright, percussive.
+  function pluck(freq, t, decay, peak) {
+    voice({ freq, type: 'triangle', t, attack: 0.004, decay, peak });
+    voice({ freq: freq * 3, t, attack: 0.004, decay: decay * 0.4, peak: peak * 0.15 });
+  }
+
+  // Singing bowl: two slightly detuned fundamentals that slowly "beat", plus metallic partials.
+  function bowl(freq, t, decay, peak) {
+    voice({ freq, t, attack: 0.05, decay, peak, detune: -5 });
+    voice({ freq, t, attack: 0.05, decay, peak: peak * 0.8, detune: 5 });
+    voice({ freq: freq * 2.71, t, attack: 0.03, decay: decay * 0.6, peak: peak * 0.3 });
+    voice({ freq: freq * 5.15, t, attack: 0.02, decay: decay * 0.3, peak: peak * 0.12 });
+  }
+
+  // A distinct end-of-session sound for each mode. Returns roughly how long it rings (s).
+  const SOUNDS = {
+    // Focus finished: a warm, rising bell arpeggio (C5 E5 G5 C6), "well done, take a break".
+    focus(t) {
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => bell(f, t + i * 0.16, 1.6, 0.14));
+      return 2.1;
+    },
+    // Short break finished: a bright double "ding-ding" (E6 then A6, twice), "back to it".
+    short(t) {
+      [0, 0.42].forEach((d) => {
+        pluck(1318.5, t + d, 0.35, 0.13);
+        pluck(1760, t + d + 0.11, 0.5, 0.13);
+      });
+      return 1.1;
+    },
+    // Long break finished: a deep, slowly fading singing bowl (G3 then D4), calm but unmistakable.
+    long(t) {
+      bowl(196, t, 4, 0.22);
+      bowl(293.66, t + 0.6, 3.4, 0.13);
+      return 4;
+    },
+  };
+
+  function playSound(mode) {
+    const ctx = state.audioCtx;
+    if (!ctx || !state.master) return 0;
+    return SOUNDS[mode](ctx.currentTime + 0.02);
   }
 
   /* ---------- Events ---------- */
@@ -534,9 +638,23 @@
     );
   });
 
+  // 🔊 buttons in Timer settings preview each mode's sound.
+  document.querySelectorAll('.sound-btn').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      ensureAudio();
+      const seconds = playSound(btn.dataset.sound);
+      restartAnimation(btn, 'is-playing');
+      clearTimeout(btn.playTimer);
+      btn.playTimer = setTimeout(() => btn.classList.remove('is-playing'), seconds * 1000);
+    })
+  );
+
   el.settingsBtn.addEventListener('click', openSettings);
   el.settingsDefaults.addEventListener('click', () => {
-    Object.keys(MODES).forEach((m) => { el.setInputs[m].value = DEFAULT_MINUTES[m]; });
+    Object.keys(MODES).forEach((m) => {
+      el.setInputs[m].value = DEFAULT_MINUTES[m];
+      el.nameInputs[m].value = DEFAULT_NAMES[m];
+    });
     rowsSort.reorder(DEFAULT_ORDER);
   });
   el.settingsForm.addEventListener('submit', (e) => {
@@ -557,8 +675,10 @@
 
   el.ring.style.strokeDasharray = RING_LENGTH;
   loadMinutes();
+  loadNames();
   applyOrder(loadOrder(), { save: false });
   setMode(state.order[0]);
+  renderNames();
   // Enable the pill's slide only after its first placement, so it doesn't sweep in from the left on load.
   requestAnimationFrame(() => requestAnimationFrame(() => el.modesNav.classList.add('is-ready')));
 })();
