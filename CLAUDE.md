@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-A single-page Pomodoro timer in plain HTML/CSS/JS with no build step, no dependencies, no package manager and no tests. All source lives in `pomodoro files/` (note the space in the folder name; quote paths).
+A single-page Pomodoro timer in plain HTML/CSS/JS with no build step, no dependencies, no package manager and no tests. All source (`index.html`, `style.css`, `script.js`) lives at the repository root, because GitHub Pages serves the site from the root of `main`; keep it there.
 
 ## Running
 
-Open `pomodoro files/index.html` directly in a browser, or serve the folder on port 8080 to match the VS Code Chrome launch config in `pomodoro files/.vscode/launch.json`:
+Open `index.html` directly in a browser, or serve the repo root on port 8080 to match the VS Code Chrome launch config in `.vscode/launch.json`:
 
 ```
-cd "pomodoro files" && npx serve -l 8080 .
+npx serve -l 8080 .
 ```
 
 (any static server works, e.g. `python -m http.server 8080`).

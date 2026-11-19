@@ -33,18 +33,21 @@ The [Pomodoro Technique](https://en.wikipedia.org/wiki/Pomodoro_Technique) split
 - **Smooth animations:** a staggered entrance on load, a sliding pill behind the mode tabs, a glow that breathes behind the ring while the timer runs, gently pulsing digits when paused, a blur crossfade when the mode changes, springy buttons and softly drifting background lights. All of these are turned off for users who have reduced motion enabled.
 - **Responsive** dark, glass-style UI that works on desktop and mobile.
 
+## Live site
+
+The app is published with GitHub Pages at <https://antonj2.github.io/Pomodoro-story/>. Pages serves `index.html` from the root of the `main` branch, so the app files must stay at the top level of the repository.
+
 ## Getting started
 
 ### Option 1: Open the file
 
-Open `pomodoro files/index.html` directly in any modern browser.
+Open `index.html` directly in any modern browser.
 
 ### Option 2: Serve it locally
 
-Serve the folder on port 8080 (this matches the VS Code launch configuration):
+Serve the project folder on port 8080 (this matches the VS Code launch configuration):
 
 ```bash
-cd "pomodoro files"
 npx serve -l 8080 .
 # or
 python -m http.server 8080
@@ -54,7 +57,7 @@ Then visit <http://localhost:8080>.
 
 ### Option 3: Debug from VS Code
 
-With the server running on port 8080, use the **Launch Chrome against localhost** configuration in `pomodoro files/.vscode/launch.json` (Run and Debug panel, or F5).
+With the server running on port 8080, use the **Launch Chrome against localhost** configuration in `.vscode/launch.json` (Run and Debug panel, or F5).
 
 ## How to use
 
@@ -71,15 +74,14 @@ With the server running on port 8080, use the **Launch Chrome against localhost*
 ## Project structure
 
 ```
-Pomodoro story/
+Pomodoro-story/
+├── index.html            # Markup: mode tabs, SVG ring, round tracker, controls, dialogs
+├── style.css             # Theming, layout and animations
+├── script.js             # All timer logic
 ├── README.md
-├── CLAUDE.md                 # Guidance for AI coding assistants
-└── pomodoro files/
-    ├── index.html            # Markup: mode tabs, SVG ring, round tracker, controls
-    ├── style.css             # Theming, layout and animations
-    ├── script.js             # All timer logic
-    └── .vscode/
-        └── launch.json       # Chrome debug config (localhost:8080)
+├── CLAUDE.md             # Guidance for AI coding assistants
+└── .vscode/
+    └── launch.json       # Chrome debug config (localhost:8080)
 ```
 
 ## How it works
