@@ -18,12 +18,12 @@
       </button>
     </header>
 
-    <!-- Mode switcher -->
-    <nav class="modes" role="tablist" aria-label="Timer mode">
+    <!-- Mode switcher. Tabs can be dragged (or moved with Shift + ←/→) to set the run order 1st, 2nd, 3rd. -->
+    <nav class="modes" role="tablist" aria-label="Timer mode (drag to reorder)">
       <span class="modes-indicator" aria-hidden="true"></span>
-      <button class="mode is-active" role="tab" aria-selected="true"  data-mode="focus">Focus</button>
-      <button class="mode"           role="tab" aria-selected="false" data-mode="short">Short break</button>
-      <button class="mode"           role="tab" aria-selected="false" data-mode="long">Long break</button>
+      <button class="mode is-active" role="tab" aria-selected="true"  data-mode="focus" title="Drag to change the order">Focus</button>
+      <button class="mode"           role="tab" aria-selected="false" data-mode="short" title="Drag to change the order">Short break</button>
+      <button class="mode"           role="tab" aria-selected="false" data-mode="long"  title="Drag to change the order">Long break</button>
     </nav>
 
     <!-- Progress ring + digits -->
@@ -66,9 +66,11 @@
   <dialog class="dialog" id="settingsDialog" aria-labelledby="settingsTitle">
     <form class="dialog-form" id="settingsForm" method="dialog">
       <h2 id="settingsTitle">Timer settings</h2>
-      <p class="dialog-hint">Choose how long each session lasts, in minutes.</p>
-      <div class="setting-rows">
+      <p class="dialog-hint">Drag <span class="hint-grip" aria-hidden="true">⠿</span> to choose which session runs 1st, 2nd and 3rd, and set each length in minutes.</p>
+      <div class="setting-rows" id="settingRows">
         <div class="setting-row" data-mode="focus">
+          <button type="button" class="drag-handle" aria-label="Reorder Focus (use ↑ and ↓)"><svg viewBox="0 0 10 16" aria-hidden="true"><circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg></button>
+          <span class="order-num" aria-hidden="true"></span>
           <label for="setFocus">Focus</label>
           <div class="stepper stepper-sm">
             <button type="button" class="step" data-step="-1" aria-label="Decrease focus minutes">−</button>
@@ -77,6 +79,8 @@
           </div>
         </div>
         <div class="setting-row" data-mode="short">
+          <button type="button" class="drag-handle" aria-label="Reorder Short break (use ↑ and ↓)"><svg viewBox="0 0 10 16" aria-hidden="true"><circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg></button>
+          <span class="order-num" aria-hidden="true"></span>
           <label for="setShort">Short break</label>
           <div class="stepper stepper-sm">
             <button type="button" class="step" data-step="-1" aria-label="Decrease short break minutes">−</button>
@@ -85,6 +89,8 @@
           </div>
         </div>
         <div class="setting-row" data-mode="long">
+          <button type="button" class="drag-handle" aria-label="Reorder Long break (use ↑ and ↓)"><svg viewBox="0 0 10 16" aria-hidden="true"><circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg></button>
+          <span class="order-num" aria-hidden="true"></span>
           <label for="setLong">Long break</label>
           <div class="stepper stepper-sm">
             <button type="button" class="step" data-step="-1" aria-label="Decrease long break minutes">−</button>
@@ -93,7 +99,7 @@
           </div>
         </div>
       </div>
-      <button type="button" class="link-btn" id="settingsDefaults">Restore defaults (25 / 5 / 15)</button>
+      <button type="button" class="link-btn" id="settingsDefaults">Restore defaults (Focus 25 → Short 5 → Long 15)</button>
       <div class="dialog-actions">
         <button type="button" class="btn" data-close>Cancel</button>
         <button type="submit" class="btn btn-primary">Save</button>
@@ -101,11 +107,11 @@
     </form>
   </dialog>
 
-  <!-- Auto-loop setup: asks how many Focus → Short break → Long break loops to run -->
+  <!-- Auto-loop setup: asks how many loops (the three sessions in the chosen order) to run -->
   <dialog class="dialog" id="loopDialog" aria-labelledby="loopTitle">
     <form class="dialog-form" id="loopForm" method="dialog">
       <h2 id="loopTitle">Auto loop</h2>
-      <p class="dialog-hint">Runs Focus → Short break → Long break on its own, one after another, without waiting for you to press Start.</p>
+      <p class="dialog-hint">Runs <span class="loop-seq" id="loopSeq">Focus → Short break → Long break</span> on its own, one after another, without waiting for you to press Start.</p>
       <label class="dialog-label" for="loopCount">How many loops?</label>
       <div class="stepper">
         <button type="button" class="step" data-step="-1" aria-label="One fewer loop">−</button>

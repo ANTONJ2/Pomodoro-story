@@ -9,11 +9,12 @@
     short: { label: 'Short break', minutes: 5  },
     long:  { label: 'Long break',  minutes: 15 },
   };
-  const ROUNDS_PER_CYCLE = 4;                 // long break is offered after every 4th focus round
+  const ROUNDS_PER_CYCLE = 4;                 // segments in the round tracker
   const RING_LENGTH = 2 * Math.PI * 90;       // circumference of the SVG ring (r = 90)
-  const LOOP_SEQUENCE = ['focus', 'short', 'long'];  // one auto loop
+  const DEFAULT_ORDER = ['focus', 'short', 'long'];
   const DEFAULT_MINUTES = { focus: 25, short: 5, long: 15 };
   const STORAGE_KEY = 'pomodoro.minutes';     // user-chosen durations, remembered in this browser
+  const ORDER_KEY = 'pomodoro.order';         // user-chosen run order (1st, 2nd, 3rd)
 
   /* ---------- DOM ---------- */
   const $ = (id) => document.getElementById(id);
@@ -25,7 +26,7 @@
     segs: document.querySelectorAll('.cycle-seg'),
     loopBtn: $('loop'), loopText: $('loopText'), loopBadge: $('loopBadge'),
     loopDialog: $('loopDialog'), loopForm: $('loopForm'), loopCount: $('loopCount'),
-    loopTotal: $('loopTotal'),
+    loopTotal: $('loopTotal'), loopSeq: $('loopSeq'), settingRows: $('settingRows'),
     settingsBtn: $('settingsBtn'), settingsDialog: $('settingsDialog'), settingsForm: $('settingsForm'),
     settingsDefaults: $('settingsDefaults'),
     setInputs: { focus: $('setFocus'), short: $('setShort'), long: $('setLong') },
@@ -46,7 +47,8 @@
     intervalId: 0,
     easeTimeout: 0,
     audioCtx: null,
-    loop: null,            // null, or { total, current (1-based), step (index into LOOP_SEQUENCE) }
+    loop: null,            // null, or { total, current (1-based), step (index into state.order) }
+    order: [...DEFAULT_ORDER],  // run order of the three modes; drives tabs, manual flow and auto loop
   };
 
   /* ---------- Rendering ---------- */
@@ -79,7 +81,8 @@
   function moveIndicator() {
     const btn = document.querySelector('.mode.is-active');
     if (!btn) return;
-    el.modesNav.style.setProperty('--x', `${btn.offsetLeft}px`);
+    // While the active tab is being dragged, follow it (its drag offset is kept in btn.dragShift).
+    el.modesNav.style.setProperty('--x', `${btn.offsetLeft + (btn.dragShift || 0)}px`);
     el.modesNav.style.setProperty('--w', `${btn.offsetWidth}px`);
   }
 
@@ -199,22 +202,184 @@
     pulse();
   }
 
+  // Without a loop, the next session in the user's order is loaded but waits for a click.
   function advanceManual() {
-    let next, message;
-    if (state.mode === 'focus') {
-      next = state.completedFocus % ROUNDS_PER_CYCLE === 0 ? 'long' : 'short';
-      message = `Focus round done. Ready for a ${MODES[next].label.toLowerCase()}?`;
-    } else {
-      next = 'focus';
-      message = 'Break over. Ready for the next focus round?';
-    }
-    setMode(next, message);                     // loads the next session but waits for a click
+    const done = MODES[state.mode].label;
+    const next = nextInOrder(state.mode);
+    setMode(next, `${done} done. Ready for ${MODES[next].label.toLowerCase()}?`);
   }
+
+  /* ---------- Run order (1st, 2nd, 3rd) ---------- */
+  const nextInOrder = (mode) => state.order[(state.order.indexOf(mode) + 1) % state.order.length];
+  const isValidOrder = (o) =>
+    Array.isArray(o) && o.length === DEFAULT_ORDER.length && DEFAULT_ORDER.every((m) => o.includes(m));
+
+  function applyOrder(order, { save = true } = {}) {
+    state.order = [...order];
+    tabsSort.reorder(state.order);              // animates the tabs into place (no-op if already there)
+    if (state.loop) state.loop.step = state.order.indexOf(state.mode);  // keep the running loop in step
+    el.loopSeq.textContent = state.order.map((m) => MODES[m].label).join(' → ');
+    moveIndicator();
+    if (save) {
+      try { localStorage.setItem(ORDER_KEY, JSON.stringify(state.order)); } catch { /* ignore */ }
+    }
+  }
+
+  function loadOrder() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ORDER_KEY));
+      if (isValidOrder(saved)) return saved;
+    } catch { /* ignore */ }
+    return DEFAULT_ORDER;
+  }
+
+  /* ---------- Drag to reorder (pointer events: mouse, touch and pen) ---------- */
+  // Makes the children matching `items` inside `container` sortable along one axis.
+  // `handle` limits where a drag can start; `onDrop(keys)` gets the new order of data-mode keys.
+  function makeSortable(container, { items, handle = items, axis, onMove, onDrop, keyMove }) {
+    const horiz = axis === 'x';
+    const pos = (e) => (horiz ? e.clientX : e.clientY);
+    const offset = (n) => (horiz ? n.offsetLeft : n.offsetTop);
+    const size = (n) => (horiz ? n.offsetWidth : n.offsetHeight);
+    const translate = (px) => (horiz ? `translateX(${px}px)` : `translateY(${px}px)`);
+    const list = () => [...container.querySelectorAll(items)];
+    const keys = () => list().map((n) => n.dataset.mode);
+    const origin = () => {
+      const r = container.getBoundingClientRect();
+      return horiz ? r.left + container.clientLeft : r.top + container.clientTop;
+    };
+    const sibling = (n, dir) => {
+      let s = dir < 0 ? n.previousElementSibling : n.nextElementSibling;
+      while (s && !s.matches(items)) s = dir < 0 ? s.previousElementSibling : s.nextElementSibling;
+      return s;
+    };
+
+    // FLIP: let `mutate` move nodes in the DOM, then animate every node from where it was.
+    function flip(nodes, mutate) {
+      const before = new Map(nodes.map((n) => [n, n.getBoundingClientRect()]));
+      mutate();
+      nodes.forEach((n) => {
+        n.style.transition = 'none';
+        n.style.transform = '';
+        const a = before.get(n), b = n.getBoundingClientRect();
+        const delta = horiz ? a.left - b.left : a.top - b.top;
+        if (!delta) { n.style.transition = ''; return; }
+        n.style.transform = translate(delta);
+        void n.offsetWidth;
+        n.style.transition = 'transform .38s cubic-bezier(.16, 1, .3, 1)';
+        n.style.transform = '';
+        n.addEventListener('transitionend', () => { n.style.transition = ''; }, { once: true });
+      });
+    }
+
+    function reorder(order) {
+      if (keys().join() === order.join()) return;
+      flip(list(), () => order.forEach((k) => container.appendChild(list().find((n) => n.dataset.mode === k))));
+    }
+
+    let drag = null;
+    let suppressClick = false;
+
+    container.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      const grip = e.target.closest(handle);
+      if (!grip || !container.contains(grip)) return;
+      const item = grip.closest(items);
+      drag = { item, id: e.pointerId, start: pos(e), grab: pos(e) - origin() - offset(item), active: false };
+    });
+
+    // Move/up are watched on window: the item is moved in the DOM mid-drag, and the
+    // pointer may leave the container, so container-level listeners could miss them.
+    window.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const { item } = drag;
+      if (!drag.active) {
+        if (Math.abs(pos(e) - drag.start) < 6) return;   // small moves are still clicks
+        drag.active = true;
+        item.setPointerCapture(e.pointerId);
+        item.style.transition = 'none';
+        item.classList.add('is-dragging');
+        container.classList.add('is-sorting');
+      }
+      e.preventDefault();
+      const lead = pos(e) - origin() - drag.grab;          // where the item's leading edge should be
+      const center = lead + size(item) / 2;
+      const prev = sibling(item, -1), next = sibling(item, 1);
+      const others = list().filter((n) => n !== item);
+      if (prev && center < offset(prev) + size(prev) / 2) {
+        flip(others, () => container.insertBefore(item, prev));
+      } else if (next && center > offset(next) + size(next) / 2) {
+        flip(others, () => container.insertBefore(item, next.nextSibling));
+      }
+      item.dragShift = lead - offset(item);
+      item.style.transition = 'none';
+      item.style.transform = translate(item.dragShift);
+      if (onMove) onMove();
+    });
+
+    function end(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      const { item, active } = drag;
+      drag = null;
+      if (!active) return;
+      container.classList.remove('is-sorting');
+      item.dragShift = 0;
+      // Spring the dropped item into its slot.
+      item.style.transition = 'transform .45s cubic-bezier(.34, 1.56, .64, 1), scale .3s ease';
+      item.style.transform = '';
+      item.classList.remove('is-dragging');
+      setTimeout(() => { item.style.transition = ''; }, 500);
+      suppressClick = true;                                 // the click that follows a drag is not a selection
+      setTimeout(() => { suppressClick = false; }, 0);
+      if (onMove) onMove();
+      if (onDrop) onDrop(keys());
+    }
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    container.addEventListener('click', (e) => {
+      if (suppressClick) { e.stopPropagation(); e.preventDefault(); suppressClick = false; }
+    }, true);
+
+    // Keyboard: keyMove(e) returns -1 / +1 to move the focused item back / forward.
+    container.addEventListener('keydown', (e) => {
+      const grip = e.target.closest(handle);
+      if (!grip || !keyMove) return;
+      const dir = keyMove(e);
+      if (!dir) return;
+      const item = grip.closest(items);
+      const target = sibling(item, dir);
+      if (!target) return;
+      e.preventDefault();
+      flip(list(), () => container.insertBefore(item, dir < 0 ? target : target.nextSibling));
+      grip.focus();
+      if (onMove) onMove();
+      if (onDrop) onDrop(keys());
+    });
+
+    return { reorder, keys };
+  }
+
+  // Tabs: drag left/right, or Shift + ←/→ on a focused tab. Changes apply immediately.
+  const tabsSort = makeSortable(el.modesNav, {
+    items: '.mode', axis: 'x',
+    onMove: moveIndicator,
+    onDrop: (order) => {
+      applyOrder(order);
+      setMessage(`Order: ${state.order.map((m) => MODES[m].label).join(' → ')}`);
+    },
+    keyMove: (e) => (e.shiftKey ? { ArrowLeft: -1, ArrowRight: 1 }[e.key] || 0 : 0),
+  });
+
+  // Settings rows: drag the ⠿ handle up/down, or ↑/↓ on a focused handle. Applied on Save.
+  const rowsSort = makeSortable(el.settingRows, {
+    items: '.setting-row', handle: '.drag-handle', axis: 'y',
+    keyMove: (e) => ({ ArrowUp: -1, ArrowDown: 1 }[e.key] || 0),
+  });
 
   /* ---------- Auto loop ---------- */
   function startLoop(total) {
     state.loop = { total, current: 1, step: 0 };
-    setMode(LOOP_SEQUENCE[0]);
+    setMode(state.order[0]);
     renderLoop();
     start();
   }
@@ -223,18 +388,18 @@
     const loop = state.loop;
     const prevEnd = state.endTime;
     loop.step += 1;
-    if (loop.step === LOOP_SEQUENCE.length) {
+    if (loop.step === state.order.length) {
       loop.step = 0;
       loop.current += 1;
     }
     if (loop.current > loop.total) {
       state.loop = null;
       renderLoop();
-      setMode('focus', `All ${loop.total} loop${loop.total > 1 ? 's' : ''} done. Great work!`);
+      setMode(state.order[0], `All ${loop.total} loop${loop.total > 1 ? 's' : ''} done. Great work!`);
       return;
     }
     renderLoop();
-    setMode(LOOP_SEQUENCE[loop.step]);
+    setMode(state.order[loop.step]);
     start(prevEnd);                             // next session begins immediately, no click needed
   }
 
@@ -274,6 +439,7 @@
 
   function openSettings() {
     Object.keys(MODES).forEach((m) => { el.setInputs[m].value = MODES[m].minutes; });
+    state.order.forEach((m) => el.settingRows.appendChild(el.setInputs[m].closest('.setting-row')));
     el.settingsDialog.showModal();
   }
 
@@ -282,6 +448,7 @@
       MODES[m].minutes = clampInput(el.setInputs[m]);
     });
     saveMinutes();
+    applyOrder(rowsSort.keys());
     if (state.status === 'idle') {
       setMode(state.mode, 'Timer settings saved.');   // reload the current session with the new length
     } else {
@@ -299,7 +466,7 @@
 
   function renderLoopTotal() {
     const n = clampLoops(Number(el.loopCount.value));
-    const perLoop = LOOP_SEQUENCE.reduce((sum, m) => sum + MODES[m].minutes, 0);
+    const perLoop = state.order.reduce((sum, m) => sum + MODES[m].minutes, 0);
     el.loopTotal.textContent = `${n} × ${perLoop} min = ${formatDuration(n * perLoop)} in total`;
   }
 
@@ -370,6 +537,7 @@
   el.settingsBtn.addEventListener('click', openSettings);
   el.settingsDefaults.addEventListener('click', () => {
     Object.keys(MODES).forEach((m) => { el.setInputs[m].value = DEFAULT_MINUTES[m]; });
+    rowsSort.reorder(DEFAULT_ORDER);
   });
   el.settingsForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -389,7 +557,8 @@
 
   el.ring.style.strokeDasharray = RING_LENGTH;
   loadMinutes();
-  setMode('focus');
+  applyOrder(loadOrder(), { save: false });
+  setMode(state.order[0]);
   // Enable the pill's slide only after its first placement, so it doesn't sweep in from the left on load.
   requestAnimationFrame(() => requestAnimationFrame(() => el.modesNav.classList.add('is-ready')));
 })();

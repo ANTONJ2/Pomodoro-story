@@ -108,14 +108,41 @@ body::after  { bottom: -40vmax; right: -30vmax; opacity: .7; animation: drift-b 
 }
 /* Set by JS after the first placement so the pill doesn't slide in on load. */
 .modes.is-ready .modes-indicator { transition: transform .55s var(--spring), width .55s var(--spring); }
+/* Follow a dragged tab closely instead of springing behind it. */
+.modes.is-ready.is-sorting .modes-indicator { transition-duration: .12s; }
+.modes { counter-reset: pos; }
 .mode {
   position: relative; z-index: 1;
+  display: inline-flex; align-items: center; gap: .45rem;
   appearance: none; border: 0; background: transparent; color: var(--muted);
-  font: inherit; font-size: .88rem; padding: .55rem 1rem; border-radius: 999px; cursor: pointer;
-  transition: color .4s var(--ease);
+  font: inherit; font-size: .88rem; padding: .55rem .9rem .55rem .6rem; border-radius: 999px; cursor: pointer;
+  user-select: none; -webkit-user-select: none;
+  touch-action: pan-y;                          /* horizontal drags reorder; vertical still scrolls */
+  counter-increment: pos;
+  transition: color .4s var(--ease), background .3s var(--ease), box-shadow .3s var(--ease), scale .3s var(--spring);
+}
+/* Run-order number (1, 2, 3) in front of each tab label */
+.mode::before {
+  content: counter(pos);
+  display: inline-grid; place-items: center;
+  width: 1.15rem; height: 1.15rem; border-radius: 50%;
+  font-size: .68rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--muted); background: rgba(255, 255, 255, .1);
+  transition: background .4s var(--ease), color .4s var(--ease);
 }
 .mode:hover { color: var(--text); }
 .mode.is-active { color: var(--text); }
+.mode.is-active::before { background: var(--accent); color: #12090f; }
+.modes.is-sorting { cursor: grabbing; }
+.mode.is-dragging {
+  z-index: 2; scale: 1.08; cursor: grabbing; color: var(--text);
+  background: rgba(255, 255, 255, .12);
+  box-shadow: 0 10px 26px -8px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .14);
+}
+@media (max-width: 380px) {
+  .mode { font-size: .8rem; gap: .3rem; padding: .5rem .65rem .5rem .45rem; }
+  .mode::before { width: 1rem; height: 1rem; font-size: .62rem; }
+}
 
 /* ---- Ring and digits ---- */
 .timer { position: relative; isolation: isolate; width: min(78vw, 340px); aspect-ratio: 1; }
@@ -250,7 +277,7 @@ body[data-status="running"] .btn-loop.is-active .loop-icon { animation: spin 2.4
 
 /* ---- Loop dialog ---- */
 .dialog {
-  width: min(92vw, 360px); padding: 1.6rem 1.5rem 1.4rem;
+  width: min(94vw, 380px); padding: 1.6rem clamp(1rem, 4vw, 1.5rem) 1.4rem;
   color: var(--text); font-family: var(--font);
   background: color-mix(in srgb, var(--bg2) 85%, transparent);
   border: 1px solid var(--glass-border); border-radius: 26px;
@@ -292,16 +319,44 @@ body[data-status="running"] .btn-loop.is-active .loop-icon { animation: spin 2.4
 
 /* Settings rows: label on the left, compact stepper on the right */
 .setting-rows { width: 100%; display: flex; flex-direction: column; gap: .55rem; }
+.setting-rows { position: relative; counter-reset: pos; }
 .setting-row {
-  display: flex; align-items: center; justify-content: space-between; gap: .8rem;
-  padding: .45rem .45rem .45rem .9rem; border-radius: 18px;
+  position: relative;
+  display: flex; align-items: center; gap: .5rem;
+  padding: .45rem .45rem .45rem .3rem; border-radius: 18px;
   background: rgba(255, 255, 255, .04); border: 1px solid var(--glass-border);
+  counter-increment: pos;
+  transition: background .3s var(--ease), box-shadow .3s var(--ease), opacity .3s var(--ease), scale .3s var(--spring);
 }
-.setting-row label { display: flex; align-items: center; gap: .55rem; font-size: .95rem; }
-.setting-row label::before {
-  content: ""; width: .55rem; height: .55rem; border-radius: 50%;
-  background: var(--dot); box-shadow: 0 0 10px var(--dot);
+.setting-row label { flex: 1; display: flex; align-items: center; gap: .55rem; font-size: .95rem; text-align: left; }
+.setting-rows.is-sorting .setting-row:not(.is-dragging) { opacity: .7; }
+.setting-row.is-dragging {
+  z-index: 2; scale: 1.03;
+  background: color-mix(in srgb, var(--dot) 14%, #1b1724);
+  box-shadow: 0 16px 34px -12px rgba(0, 0, 0, .8), 0 0 0 1px color-mix(in srgb, var(--dot) 40%, transparent);
 }
+
+/* ⠿ grip that starts a drag (also ↑/↓ when focused) */
+.drag-handle {
+  appearance: none; border: 0; background: none; padding: .45rem .3rem; border-radius: 10px;
+  display: grid; place-items: center; color: var(--muted); cursor: grab;
+  touch-action: none;
+  transition: color .3s var(--ease), background .3s var(--ease);
+}
+.drag-handle svg { width: .65rem; height: 1rem; fill: currentColor; }
+.drag-handle:hover { color: var(--text); background: rgba(255, 255, 255, .08); }
+.setting-row.is-dragging .drag-handle { cursor: grabbing; color: var(--text); }
+
+/* Run-order number: 1st, 2nd, 3rd */
+.order-num::before {
+  content: counter(pos);
+  display: grid; place-items: center;
+  width: 1.4rem; height: 1.4rem; border-radius: 50%;
+  font-size: .75rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: #12090f; background: var(--dot);
+}
+.hint-grip { color: var(--text); }
+.loop-seq { color: var(--text); }
 .setting-row[data-mode="focus"] { --dot: #ff6b81; }
 .setting-row[data-mode="short"] { --dot: #4fd1c5; }
 .setting-row[data-mode="long"]  { --dot: #7c9cff; }

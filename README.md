@@ -8,9 +8,10 @@ The [Pomodoro Technique](https://en.wikipedia.org/wiki/Pomodoro_Technique) split
 
 - **Three modes:** Focus (25 min), Short break (5 min) and Long break (15 min) by default, switchable with tabs at the top.
 - **Custom durations:** the ⚙ button opens **Timer settings**, where you set each session's length in minutes (Focus 1–120, breaks 1–60). Your choice is remembered in this browser, and **Restore defaults** brings back 25 / 5 / 15.
-- **Automatic cycle:** after a focus round the next break is loaded for you. Every 4th focus round is followed by a long break; otherwise a short break. After a break, the next focus round is loaded.
+- **Automatic cycle:** when a session ends, the next one in your run order is loaded for you (by default Focus → Short break → Long break, then back to Focus).
 - **You stay in control:** the next session is loaded but does not start until you click **Start**.
-- **Auto loop:** click **Loop**, choose how many loops (1–12) and the app runs Focus → Short break → Long break by itself, starting each session automatically. A "Loop 2 of 3" badge shows progress inside the ring. Pause works as usual, **Stop loop** ends it, and clicking a mode tab takes back manual control.
+- **Your own run order:** drag the mode tabs (or the ⠿ handles in Timer settings) to choose which session runs 1st, 2nd and 3rd. Each tab shows its position number. The order is remembered and is used both when a session ends normally and in Auto loop. Keyboard: **Shift + ←/→** on a tab, or **↑/↓** on a settings handle.
+- **Auto loop:** click **Loop**, choose how many loops (1–12) and the app runs the three sessions in your chosen order by itself, starting each session automatically. A "Loop 2 of 3" badge shows progress inside the ring. Pause works as usual, **Stop loop** ends it, and clicking a mode tab takes back manual control.
 - **Animated progress ring:** an SVG ring drains smoothly as time runs out and refills with an easing animation on reset or mode change.
 - **Round tracker:** four segments below the timer show how many focus rounds you've completed in the current cycle.
 - **Start / Pause / Resume and Reset** controls.
@@ -58,7 +59,7 @@ With the server running on port 8080, use the **Launch Chrome against localhost*
 4. Click **Start** to begin the next session.
 5. **Reset** restarts the current mode from its full duration.
 
-**Auto loop:** click **Loop**, set the number of loops with **−** / **+** (the dialog shows the total time), then click **Start loop**. Each loop is Focus → Short break → Long break (using your chosen durations), and every session starts on its own after a chime. Click **Stop loop** at any time to end it.
+**Auto loop:** click **Loop**, set the number of loops with **−** / **+** (the dialog shows the total time), then click **Start loop**. Each loop runs the three sessions in your chosen order and durations, and every session starts on its own after a chime. Click **Stop loop** at any time to end it.
 
 > Sound only plays after you've clicked Start at least once, because browsers block audio until the user interacts with the page.
 
@@ -97,7 +98,8 @@ Pomodoro story/
 ## Customisation
 
 - **Durations:** users can change them in the app via the ⚙ settings button (saved in `localStorage` under `pomodoro.minutes`). To change the built-in defaults, edit `minutes` in `MODES` and `DEFAULT_MINUTES` at the top of `script.js`, and the allowed range via the `min`/`max` attributes on the settings inputs in `index.html`.
-- **Rounds before a long break:** change `ROUNDS_PER_CYCLE` (also update the number of `.cycle-seg` elements in `index.html` to match).
+- **Default run order:** change `DEFAULT_ORDER` in `script.js` (users can override it by dragging; saved under `pomodoro.order`).
+- **Round tracker size:** change `ROUNDS_PER_CYCLE` (also update the number of `.cycle-seg` elements in `index.html` to match).
 - **Colours:** edit the `body[data-mode="…"]` rules in `style.css`.
 - **Chime:** change the frequencies in `playChime()` in `script.js`.
 - **Adding a new mode:** add an entry to `MODES`, a button with a matching `data-mode` in `index.html`, and a `body[data-mode="…"]` rule in `style.css`.
